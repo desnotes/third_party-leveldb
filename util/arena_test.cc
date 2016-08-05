@@ -11,11 +11,11 @@ namespace leveldb {
 
 class ArenaTest { };
 
-TEST(ArenaTest, Empty) {
+TEST(ArenaTest, ArenaTestEmpty) {
   Arena arena;
 }
 
-TEST(ArenaTest, Simple) {
+TEST(ArenaTest, ArenaTestSimple) {
   std::vector<std::pair<size_t, char*> > allocated;
   Arena arena;
   const int N = 100000;

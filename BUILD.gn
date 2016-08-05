@@ -1,0 +1,257 @@
+# Copyright 2016 The Fuchsia Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+defines = [ "LEVELDB_PLATFORM_POSIX=1" ]
+
+config("leveldb_config") {
+  include_dirs = [
+    ".",
+    "include",
+  ]
+}
+
+config("leveldb_warnings_config") {
+  cflags = [
+    "-Wall",
+    "-Werror",
+    "-Wno-sign-compare",
+  ]
+}
+
+static_library("leveldb") {
+  sources = [
+    "db/builder.cc",
+    "db/builder.h",
+    "db/db_impl.cc",
+    "db/db_impl.h",
+    "db/db_iter.cc",
+    "db/db_iter.h",
+    "db/dbformat.cc",
+    "db/dbformat.h",
+    "db/dumpfile.cc",
+    "db/filename.cc",
+    "db/filename.h",
+    "db/log_format.h",
+    "db/log_reader.cc",
+    "db/log_reader.h",
+    "db/log_writer.cc",
+    "db/log_writer.h",
+    "db/memtable.cc",
+    "db/memtable.h",
+    "db/repair.cc",
+    "db/skiplist.h",
+    "db/snapshot.h",
+    "db/table_cache.cc",
+    "db/table_cache.h",
+    "db/version_edit.cc",
+    "db/version_edit.h",
+    "db/version_set.cc",
+    "db/version_set.h",
+    "db/write_batch.cc",
+    "db/write_batch_internal.h",
+    "helpers/memenv/memenv.cc",
+    "helpers/memenv/memenv.h",
+    "include/leveldb/cache.h",
+    "include/leveldb/comparator.h",
+    "include/leveldb/db.h",
+    "include/leveldb/dumpfile.h",
+    "include/leveldb/env.h",
+    "include/leveldb/filter_policy.h",
+    "include/leveldb/iterator.h",
+    "include/leveldb/options.h",
+    "include/leveldb/slice.h",
+    "include/leveldb/status.h",
+    "include/leveldb/table.h",
+    "include/leveldb/table_builder.h",
+    "include/leveldb/write_batch.h",
+    "port/port.h",
+    "port/port_posix.cc",
+    "port/port_posix.h",
+    "table/block.cc",
+    "table/block.h",
+    "table/block_builder.cc",
+    "table/block_builder.h",
+    "table/filter_block.cc",
+    "table/filter_block.h",
+    "table/format.cc",
+    "table/format.h",
+    "table/iterator.cc",
+    "table/iterator_wrapper.h",
+    "table/merger.cc",
+    "table/merger.h",
+    "table/table.cc",
+    "table/table_builder.cc",
+    "table/two_level_iterator.cc",
+    "table/two_level_iterator.h",
+    "util/arena.cc",
+    "util/arena.h",
+    "util/bloom.cc",
+    "util/cache.cc",
+    "util/coding.cc",
+    "util/coding.h",
+    "util/comparator.cc",
+    "util/crc32c.cc",
+    "util/crc32c.h",
+    "util/env.cc",
+    "util/env_posix.cc",
+    "util/filter_policy.cc",
+    "util/hash.cc",
+    "util/hash.h",
+    "util/logging.cc",
+    "util/logging.h",
+    "util/mutexlock.h",
+    "util/options.cc",
+    "util/random.h",
+    "util/status.cc",
+  ]
+
+  deps = [
+    "//third_party/re2",
+    "//third_party/snappy",
+  ]
+
+  public_configs = [ ":leveldb_config" ]
+
+  configs -= [ "//build/config:default_warnings" ]
+  configs += [ ":leveldb_warnings_config" ]
+}
+
+source_set("leveldb_testutil") {
+  sources = [
+    "util/histogram.cc",
+    "util/histogram.h",
+    "util/testharness.cc",
+    "util/testharness.h",
+    "util/testutil.cc",
+    "util/testutil.h",
+  ]
+
+  public_deps = [
+    ":leveldb",
+  ]
+
+  configs -= [ "//build/config:default_warnings" ]
+  configs += [ ":leveldb_warnings_config" ]
+}
+
+# These leveldb *_test.cc files all define their own identical main function which
+# just calls the same RunAllTests helper. Having this many different binaries is
+# really difficult to deal with in our setup, so we glob them into one binary
+# called leveldb_tests. To do this we need to give each file a different name
+# for its main symbol which we'll ignore. We do this with the magic and horror
+# of a GN template to generate distinct defines for each file.
+
+template("leveldb_test_source_wrapper") {
+  assert(defined(invoker.test), "Must define test")
+
+  source_set(target_name) {
+    testonly = true
+
+    sources = [
+      invoker.test,
+    ]
+
+    deps = [
+      ":leveldb_testutil",
+      "//third_party/gtest",
+    ]
+
+    cflags = [ "-Dmain=fake_main_${target_name}" ]
+
+    configs -= [ "//build/config:default_warnings" ]
+    configs += [ ":leveldb_warnings_config" ]
+  }
+}
+
+leveldb_test_source_wrapper("corruption_test") {
+  test = "db/corruption_test.cc"
+}
+leveldb_test_source_wrapper("dbformat_test") {
+  test = "db/dbformat_test.cc"
+}
+leveldb_test_source_wrapper("filename_test") {
+  test = "db/filename_test.cc"
+}
+leveldb_test_source_wrapper("log_test") {
+  test = "db/log_test.cc"
+}
+leveldb_test_source_wrapper("skiplist_test") {
+  test = "db/skiplist_test.cc"
+}
+leveldb_test_source_wrapper("version_edit_test") {
+  test = "db/version_edit_test.cc"
+}
+leveldb_test_source_wrapper("write_batch_test") {
+  test = "db/write_batch_test.cc"
+}
+leveldb_test_source_wrapper("filter_block_test") {
+  test = "table/filter_block_test.cc"
+}
+leveldb_test_source_wrapper("table_test") {
+  test = "table/table_test.cc"
+}
+leveldb_test_source_wrapper("arena_test") {
+  test = "util/arena_test.cc"
+}
+leveldb_test_source_wrapper("bloom_test") {
+  test = "util/bloom_test.cc"
+}
+leveldb_test_source_wrapper("cache_test") {
+  test = "util/cache_test.cc"
+}
+leveldb_test_source_wrapper("crc32c_test") {
+  test = "util/crc32c_test.cc"
+}
+
+group("leveldb_test_sources") {
+  testonly = true
+
+  deps = [
+    ":arena_test",
+    ":bloom_test",
+    ":cache_test",
+    ":corruption_test",
+    ":crc32c_test",
+    ":dbformat_test",
+    ":filename_test",
+    ":filter_block_test",
+    ":log_test",
+    ":skiplist_test",
+    ":table_test",
+    ":version_edit_test",
+    ":write_batch_test",
+  ]
+}
+
+executable("leveldb_tests") {
+  testonly = true
+
+  sources = [
+    # Use the actual main from env_test.cc (arbitrarily chosen).
+    # The rest of the test sources come from :leveldb_test_sources
+    "util/env_test.cc",
+  ]
+
+  deps = [
+    ":leveldb_test_sources",
+    ":leveldb_testutil",
+    "//third_party/gtest",
+  ]
+
+  configs -= [ "//build/config:default_warnings" ]
+  configs += [ ":leveldb_warnings_config" ]
+}
+
+executable("leveldb_db_bench") {
+  testonly = true
+
+  sources = [
+    "db/db_bench.cc",
+  ]
+
+  deps = [
+    ":leveldb_testutil",
+  ]
+}
+# TODO: Figure out "db/db_test.cc",

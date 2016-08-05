@@ -645,7 +645,7 @@ class Harness {
 };
 
 // Test empty table/block.
-TEST(Harness, Empty) {
+TEST(Harness, HarnessEmpty) {
   for (int i = 0; i < kNumTestArgs; i++) {
     Init(kTestArgList[i]);
     Random rnd(test::RandomSeed() + 1);

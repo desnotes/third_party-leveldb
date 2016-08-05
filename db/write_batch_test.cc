@@ -54,7 +54,7 @@ static std::string PrintContents(WriteBatch* b) {
 
 class WriteBatchTest { };
 
-TEST(WriteBatchTest, Empty) {
+TEST(WriteBatchTest, WriteBatchEmpty) {
   WriteBatch batch;
   ASSERT_EQ("", PrintContents(&batch));
   ASSERT_EQ(0, WriteBatchInternal::Count(&batch));
