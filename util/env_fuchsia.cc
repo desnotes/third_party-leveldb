@@ -280,27 +280,14 @@ class FuchsiaWritableFile : public WritableFile {
   }
 };
 
-static int LockOrUnlock(int fd, bool lock) {
-  errno = 0;
-  struct flock f;
-  memset(&f, 0, sizeof(f));
-  f.l_type = (lock ? F_WRLCK : F_UNLCK);
-  f.l_whence = SEEK_SET;
-  f.l_start = 0;
-  f.l_len = 0;        // Lock/unlock entire file
-  return fcntl(fd, F_SETLK, &f);
-}
-
 class FuchsiaFileLock : public FileLock {
  public:
-  int fd_;
   std::string name_;
 };
 
-// Set of locked files.  We keep a separate set instead of just
-// relying on fcntrl(F_SETLK) since fcntl(F_SETLK) does not provide
-// any protection against multiple uses from the same process.
-class PosixLockTable {
+// Set of locked files. This is used to guard against multiple uses from one
+// process.
+class LockTable {
  private:
   port::Mutex mu_;
   std::set<std::string> locked_files_;
@@ -453,22 +440,16 @@ class FuchsiaEnv : public Env {
     return result;
   }
 
+  // Our implementation uses the |locks_| table to guard against creating
+  // multiple databases backed by the same file within one process. This does
+  // not guard against multiple processes using the same file concurrently.
   virtual Status LockFile(const std::string& fname, FileLock** lock) {
     *lock = NULL;
     Status result;
-    int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
-    if (fd < 0) {
-      result = IOError(fname, errno);
-    } else if (!locks_.Insert(fname)) {
-      close(fd);
+    if (!locks_.Insert(fname)) {
       result = Status::IOError("lock " + fname, "already held by process");
-    } else if (LockOrUnlock(fd, true) == -1) {
-      result = IOError("lock " + fname, errno);
-      close(fd);
-      locks_.Remove(fname);
     } else {
       FuchsiaFileLock* my_lock = new FuchsiaFileLock;
-      my_lock->fd_ = fd;
       my_lock->name_ = fname;
       *lock = my_lock;
     }
@@ -478,11 +459,7 @@ class FuchsiaEnv : public Env {
   virtual Status UnlockFile(FileLock* lock) {
     FuchsiaFileLock* my_lock = reinterpret_cast<FuchsiaFileLock*>(lock);
     Status result;
-    if (LockOrUnlock(my_lock->fd_, false) == -1) {
-      result = IOError("unlock", errno);
-    }
     locks_.Remove(my_lock->name_);
-    close(my_lock->fd_);
     delete my_lock;
     return result;
   }
@@ -558,7 +535,7 @@ class FuchsiaEnv : public Env {
   typedef std::deque<BGItem> BGQueue;
   BGQueue queue_;
 
-  PosixLockTable locks_;
+  LockTable locks_;
   MmapLimiter mmap_limit_;
 };
 
