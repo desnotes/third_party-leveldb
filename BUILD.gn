@@ -94,7 +94,7 @@ static_library("leveldb") {
     "util/crc32c.cc",
     "util/crc32c.h",
     "util/env.cc",
-    "util/env_posix.cc",
+    "util/env_fuchsia.cc",
     "util/filter_policy.cc",
     "util/hash.cc",
     "util/hash.h",
