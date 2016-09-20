@@ -159,7 +159,10 @@ class FuchsiaSequentialFile: public SequentialFile {
   }
 };
 
-// pread() based random-access
+// This is typically less efficient that mmap-ing the file, but file-backed mmap
+// is not currently available on Fuchsia.
+// TODO(ppi): when mmaping files is possible of Fuchsia, bring in mmap-based
+// impl.
 class FuchsiaRandomAccessFile: public RandomAccessFile {
  private:
   std::string filename_;
@@ -173,94 +176,14 @@ class FuchsiaRandomAccessFile: public RandomAccessFile {
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const {
     Status s;
-    ssize_t r = pread(fd_, scratch, n, static_cast<off_t>(offset));
+    if (lseek(fd_, static_cast<off_t>(offset), SEEK_SET) == -1) {
+      return IOError(filename_, errno);
+    }
+    ssize_t r = read(fd_, scratch, n);
     *result = Slice(scratch, (r < 0) ? 0 : r);
     if (r < 0) {
       // An error: return a non-ok status
       s = IOError(filename_, errno);
-    }
-    return s;
-  }
-};
-
-// Helper class to limit mmap file usage so that we do not end up
-// running out virtual memory or running into kernel performance
-// problems for very large databases.
-class MmapLimiter {
- public:
-  // Up to 1000 mmaps for 64-bit binaries; none for smaller pointer sizes.
-  MmapLimiter() {
-    SetAllowed(sizeof(void*) >= 8 ? 1000 : 0);
-  }
-
-  // If another mmap slot is available, acquire it and return true.
-  // Else return false.
-  bool Acquire() {
-    if (GetAllowed() <= 0) {
-      return false;
-    }
-    MutexLock l(&mu_);
-    intptr_t x = GetAllowed();
-    if (x <= 0) {
-      return false;
-    } else {
-      SetAllowed(x - 1);
-      return true;
-    }
-  }
-
-  // Release a slot acquired by a previous call to Acquire() that returned true.
-  void Release() {
-    MutexLock l(&mu_);
-    SetAllowed(GetAllowed() + 1);
-  }
-
- private:
-  port::Mutex mu_;
-  port::AtomicPointer allowed_;
-
-  intptr_t GetAllowed() const {
-    return reinterpret_cast<intptr_t>(allowed_.Acquire_Load());
-  }
-
-  // REQUIRES: mu_ must be held
-  void SetAllowed(intptr_t v) {
-    allowed_.Release_Store(reinterpret_cast<void*>(v));
-  }
-
-  MmapLimiter(const MmapLimiter&);
-  void operator=(const MmapLimiter&);
-};
-
-// mmap() based random-access
-class FuchsiaMmapReadableFile: public RandomAccessFile {
- private:
-  std::string filename_;
-  void* mmapped_region_;
-  size_t length_;
-  MmapLimiter* limiter_;
-
- public:
-  // base[0,length-1] contains the mmapped contents of the file.
-  FuchsiaMmapReadableFile(const std::string& fname, void* base, size_t length,
-                        MmapLimiter* limiter)
-      : filename_(fname), mmapped_region_(base), length_(length),
-        limiter_(limiter) {
-  }
-
-  virtual ~FuchsiaMmapReadableFile() {
-    munmap(mmapped_region_, length_);
-    limiter_->Release();
-  }
-
-  virtual Status Read(uint64_t offset, size_t n, Slice* result,
-                      char* scratch) const {
-    Status s;
-    if (offset + n > length_) {
-      *result = Slice();
-      s = IOError(filename_, EINVAL);
-    } else {
-      *result = Slice(reinterpret_cast<char*>(mmapped_region_) + offset, n);
     }
     return s;
   }
@@ -397,21 +320,6 @@ class FuchsiaEnv : public Env {
     int fd = open(fname.c_str(), O_RDONLY);
     if (fd < 0) {
       s = IOError(fname, errno);
-    } else if (mmap_limit_.Acquire()) {
-      uint64_t size;
-      s = GetFileSize(fname, &size);
-      if (s.ok()) {
-        void* base = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, 0);
-        if (base != MAP_FAILED) {
-          *result = new FuchsiaMmapReadableFile(fname, base, size, &mmap_limit_);
-        } else {
-          s = IOError(fname, errno);
-        }
-      }
-      close(fd);
-      if (!s.ok()) {
-        mmap_limit_.Release();
-      }
     } else {
       *result = new FuchsiaRandomAccessFile(fname, fd);
     }
@@ -603,7 +511,6 @@ class FuchsiaEnv : public Env {
   BGQueue queue_;
 
   LockTable locks_;
-  MmapLimiter mmap_limit_;
 };
 
 FuchsiaEnv::FuchsiaEnv() : started_bgthread_(false) {
