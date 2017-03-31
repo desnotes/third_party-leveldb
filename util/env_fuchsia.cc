@@ -176,10 +176,7 @@ class FuchsiaRandomAccessFile: public RandomAccessFile {
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const {
     Status s;
-    if (lseek(fd_, static_cast<off_t>(offset), SEEK_SET) == -1) {
-      return IOError(filename_, errno);
-    }
-    ssize_t r = read(fd_, scratch, n);
+    ssize_t r = pread(fd_, scratch, n, static_cast<off_t>(offset));
     *result = Slice(scratch, (r < 0) ? 0 : r);
     if (r < 0) {
       // An error: return a non-ok status
