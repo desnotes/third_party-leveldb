@@ -2,6 +2,19 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import("//packages/package.gni")
+
+package("leveldb_tests") {
+  testonly = true
+  deps = [
+    ":leveldb_tests_bin",
+  ]
+
+  binaries = [ {
+        name = "leveldb_tests"
+      } ]
+}
+
 defines = [ "LEVELDB_PLATFORM_POSIX=1" ]
 
 config("leveldb_config") {
@@ -224,7 +237,8 @@ group("leveldb_test_sources") {
   ]
 }
 
-executable("leveldb_tests") {
+executable("leveldb_tests_bin") {
+  output_name = "leveldb_tests"
   testonly = true
 
   sources = [
@@ -254,4 +268,5 @@ executable("leveldb_db_bench") {
     ":leveldb_testutil",
   ]
 }
+
 # TODO: Figure out "db/db_test.cc",
