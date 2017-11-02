@@ -6,6 +6,8 @@ import("//packages/package.gni")
 
 package("leveldb_tests") {
   testonly = true
+  system_image = true
+
   deps = [
     ":leveldb_tests_bin",
   ]
