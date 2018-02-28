@@ -169,7 +169,7 @@ template("leveldb_test_source_wrapper") {
 
     deps = [
       ":leveldb_testutil",
-      "//third_party/gtest",
+      "//third_party/googletest:gtest",
     ]
 
     cflags = [ "-Dmain=fake_main_${target_name}" ]
@@ -252,7 +252,7 @@ executable("leveldb_tests_bin") {
   deps = [
     ":leveldb_test_sources",
     ":leveldb_testutil",
-    "//third_party/gtest",
+    "//third_party/googletest:gtest",
   ]
 
   configs -= [ "//build/config:default_warnings" ]
